@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0" />
+		<title>gftp</title>
+		<link rel="stylesheet" type="text/css" href="css/mate.css" />
+		<link rel="stylesheet" type="text/css" href="css/quasar.min.css" />
+		<script type="text/javascript">
+			// 可选的
+			window.quasarConfig = {
+				brand: { // 这不适用于IE 11
+					primary: '#00ba56',
+				},
+				notify: {}, // Notify Quasar插件的默认选项集
+				loading: {}, // Loading Quasar插件的默认选项集
+				loadingBar: {}, // LoadingBar Quasar插件的设置
+			}
+		</script>
+	</head>
+	<body>
+		<script src="js/vue.js" type="text/javascript" charset="utf-8"></script>
+		<script src="js/quasar.umd.min.js" type="text/javascript" charset="utf-8"></script>
+		<script src="js/zh-hans.umd.min.js" type="text/javascript" charset="utf-8"></script>
+		<script src="js/axios.min.js" type="text/javascript" charset="utf-8"></script>
+		<!-- 主界面 -->
+		<div id="q-app" class="fullscreen">
+			<q-ajax-bar ref="bar" position="top" color="primary" size="3px" skip-hijack></q-ajax-bar>
+			<q-layout view="hHh lpR fFf">
+				<q-header class="bg-primary text-white">
+					<q-toolbar>
+						<q-toolbar-title>
+							GFTP
+						</q-toolbar-title>
+					</q-toolbar>
+				</q-header>
+
+				<q-page-container>
+					<q-page>
+
+						<q-btn-group outline class="q-pa-md">
+							<q-btn @click="showUploadDialog()" outline color="primary" label="上传文件"></q-btn>
+						</q-btn-group>
+
+						<div class="q-mx-md flex column items-center full-width" v-if="!canRequest">
+							<q-spinner-ios color="primary" size="2em"></q-spinner-ios>
+							<span class="text-subtitle2">正在加载中...</span>
+						</div>
+						<div class="q-mx-md flex row justify-center" v-else>
+							<q-list bordered class="rounded-borders scroll-y" style="max-width: 1080px;width: 100%;height: calc(100vh - 50px - 68px - 60px);">
+								<q-item clickable v-if="hasPaths">
+									<!-- 返回层级按钮 -->
+									<q-item-section avatar>
+										<q-icon color="primary" name="subdirectory_arrow_left"></q-icon>
+									</q-item-section>
+									<q-item-section @click="onBack()">返回上一级</q-item-section>
+								</q-item>
+
+								<q-item clickable v-for="(item,index) in files" :key="index">
+									<q-item-section avatar>
+										<q-icon color="primary" :name="item.isDir?'folder':'description'"></q-icon>
+									</q-item-section>
+									<q-item-section @click="onTap(item)">{{item.name}}</q-item-section>
+									<q-item-section avatar v-if="!item.isDir" top side>
+										<div class="text-grey-8 q-gutter-xs">
+											<q-btn flat @click="showVideoDialog(item)" round color="primary" v-if="isVideo(item.name)" icon="play_circle_filled"></q-btn>
+										</div>
+									</q-item-section>
+								</q-item>
+							</q-list>
+						</div>
+
+<!--						文件上传弹窗-->
+						<q-dialog v-model="uploadDialogVisible">
+							<q-card>
+								<q-card-section>
+									<q-uploader
+											:url="generaUploadUrl()"
+											label="选择你的文件并上传"
+											multiple
+											style="max-width: 300px"
+											@finish="uploadDone()"
+											:field-name="(file)=>'file'"
+									></q-uploader>
+								</q-card-section>
+							</q-card>
+						</q-dialog>
+
+<!--						视频播放弹窗-->
+						<q-dialog
+								v-model="videoDialogVisible"
+								:maximized="videoDialogFull"
+								transition-show="slide-up"
+								transition-hide="slide-down"
+						>
+							<q-card class="bg-white" :style="{width:videoDialogFull?'80%':'800px'}">
+								<q-bar>
+									<span>
+										{{videoForm.name}}
+									</span>
+									<q-space></q-space>
+									<q-btn dense flat icon="minimize" @click="videoDialogFull = false" :disable="!videoDialogFull">
+										<q-tooltip v-if="videoDialogFull" content-class="bg-white text-primary">Minimize</q-tooltip>
+									</q-btn>
+									<q-btn dense flat icon="crop_square" @click="videoDialogFull = true" :disable="videoDialogFull">
+										<q-tooltip v-if="!videoDialogFull" content-class="bg-white text-primary">Maximize</q-tooltip>
+									</q-btn>
+									<q-btn dense flat icon="close" v-close-popup>
+										<q-tooltip content-class="bg-white text-primary">Close</q-tooltip>
+									</q-btn>
+								</q-bar>
+
+								<q-card-section class="q-pa-md">
+									<q-video
+											:ratio="16/9"
+											:src="gengraVideoSrc()"
+									></q-video>
+								</q-card-section>
+							</q-card>
+						</q-dialog>
+
+					</q-page>
+				</q-page-container>
+
+			</q-layout>
+		</div>
+		<script>
+			Quasar.lang.set(Quasar.lang.zhHans)
+			new Vue({
+				el: '#q-app',
+				data: function() {
+					return {
+						files: [],
+						canRequest: false,
+						hasPaths: false,
+						videoDialogVisible:false,
+						videoDialogFull:false,
+						videoForm:{},
+						uploadDialogVisible:false,
+					}
+				},
+				methods: {
+					// 上传完成事件
+					uploadDone(){
+						let paths = Quasar.plugins.LocalStorage.getItem('paths')
+						if(paths === null){
+							this.fetchList()
+						}else{
+							this.refush(paths.join('/'))
+						}
+					},
+					// 生成上传url
+					generaUploadUrl(){
+						let paths = Quasar.plugins.LocalStorage.getItem('paths')
+						if(paths === null){
+							paths =  'http://'+this.getHost()+'/upload'
+						}else{
+							paths =  'http://'+this.getHost()+'/upload?path='+paths.join('/')
+						}
+						return paths
+					},
+					// 显示文件上传弹窗
+					showUploadDialog(){
+						this.uploadDialogVisible = true
+					},
+					// 获取服务地址，用于动态拼接api地址
+					getHost(){
+						return window.location.host
+					},
+					// 去下载
+					toDownload(item){
+						let paths = Quasar.plugins.LocalStorage.getItem('paths')
+						if(paths === null){
+							Quasar.utils.openURL('http://'+this.getHost()+'/download?path='+item.name)
+						}else{
+							let joinPath = paths.join('/')
+							joinPath = joinPath+"/"+item.name
+							Quasar.utils.openURL('http://'+this.getHost()+'/download?path='+joinPath)
+						}
+					},
+					// 生成视频播放url
+					gengraVideoSrc(){
+						let paths = Quasar.plugins.LocalStorage.getItem('paths')
+						if(paths === null){
+							return 'http://'+this.getHost()+'/video?path='+this.videoForm.name
+						}else{
+							let joinPath = paths.join('/')
+							joinPath = joinPath+"/"+this.videoForm.name
+							return 'http://'+this.getHost()+'/video?path='+joinPath
+						}
+					},
+					// 显示播放视频弹窗
+					showVideoDialog(item){
+						this.videoForm = item
+						this.videoDialogVisible = true
+					},
+					// 判断视频
+					isVideo(name){
+						let suffix = name.split('.')
+						if(suffix[suffix.length-1].includes('mp4')){
+							return true
+						}
+						return false
+					},
+					// 后退操作
+					onBack() {
+						let paths = Quasar.plugins.LocalStorage.getItem('paths')
+						if (paths.length === 1) {
+							Quasar.plugins.LocalStorage.remove('paths')
+							this.canRequest = false
+							this.hasPaths = false
+							this.fetchList()
+						} else {
+							paths.pop()
+							Quasar.plugins.LocalStorage.set('paths', paths)
+							this.canRequest = false
+							this.hasPaths = true
+							this.refush(paths.join('/'))
+						}
+					},
+					// 刷新目录
+					refush(name) {
+						axios.get(`http://${this.getHost()}/dir?path=${name}`).then(res => {
+							let response = res.data
+							if (response.status === 'success') {
+								this.files = response.data
+								console.log(this.files)
+							} else {
+
+							}
+						}).finally(() => {
+							this.canRequest = true
+						})
+					},
+					// 列表点击
+					onTap(item) {
+						if (item.isDir) {
+							let paths = Quasar.plugins.LocalStorage.getItem('paths')
+							let name = item.name
+							if (paths === null) {
+								paths = []
+								paths.push(item.name)
+							} else {
+								paths.push(item.name)
+								name = paths.join('/')
+							}
+							Quasar.plugins.LocalStorage.set('paths', paths)
+							this.canRequest = false
+							this.hasPaths = true
+							this.refush(name)
+						} else {
+							this.toDownload(item)
+						}
+					},
+					// 遍历目录
+					fetchList() {
+						axios.get("http://"+this.getHost()+"/dir").then(res => {
+							let response = res.data
+							if (response.status === 'success') {
+								this.files = response.data
+								console.log(this.files)
+							} else {
+
+							}
+						}).finally(() => {
+							this.canRequest = true
+						})
+					}
+				},
+				// 页面渲染时执行
+				mounted() {
+					if (Quasar.plugins.LocalStorage.has('paths')) {
+						let paths = Quasar.plugins.LocalStorage.getItem('paths')
+						this.hasPaths = true
+						this.refush(paths.join('/'))
+					} else {
+						this.fetchList()
+					}
+				}
+			})
+		</script>
+	</body>
+</html>
