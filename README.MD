@@ -42,7 +42,7 @@
 
 ### 后端
 
-后端基于`goframe`这个框架，核心代码位于`app/api/dir`下
+后端基于`goframe`这个框架，请了解它，并安装环境，核心代码位于`app/api/dir`下
 
 ```shell
 ├── dir.go # 目录树接口
