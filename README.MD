@@ -4,6 +4,26 @@
 
 ## 预览
 
+![image-20200911103659341](README.assets/image-20200911103659341.png)
+
+
+
+![image-20200911103755815](README.assets/image-20200911103755815.png)
+
+
+
+![image-20200911103817504](README.assets/image-20200911103817504.png)
+
+
+
+![image-20200911103843066](README.assets/image-20200911103843066.png)
+
+
+
+![image-20200911103925860](README.assets/image-20200911103925860.png)
+
+
+
 
 ## 如何运行
 
@@ -15,3 +35,30 @@
 ```shell
 ./gftp -path 你的路径 -port 服务端口
 ```
+
+## 如何开发
+
+如果你会`go`和`vue`，那么这个项目对你就不是难事
+
+### 后端
+
+后端基于`goframe`这个框架，核心代码位于`app/api/dir`下
+
+```shell
+├── dir.go # 目录树接口
+├── download.go # 下载接口
+├── upload.go # 上传接口
+└── video.go # 视频接口
+```
+
+### 前端
+
+前端代码位于`template/index.html`，它基于`quasar`，一个vue的UI框架和富工具集
+
+
+
+**这是前端的初始逻辑图，基于它再去看代码，应该不会有难度**
+
+![img](https://cdn.nlark.com/yuque/0/2020/png/330921/1599792391334-7358dbab-525c-43a5-af93-515e10c0d388.png)
+
+**这是一个个人项目，如果你想，你可以随意的更改，以便于实现你的需求**
